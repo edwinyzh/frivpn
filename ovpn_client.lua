@@ -7,6 +7,7 @@ local x509 = require "openssl.x509"
 local castore = require "openssl.x509.store"
 local pkey = require "openssl.pkey"
 local posix = require "posix"
+local cli = require "cliargs"
 
 require "ovpn"
 require "utils"
@@ -459,6 +460,11 @@ function vpn:connect(host, port)
 	end
 end
 
+local function print_version()
+	print("frivpn_client: version 0.0.1")
+	os.exit(0)
+end
+
 function ssl_preload()
 	local a, b = csock.pair()
 	-- do a dummy checktls so cqueues socket loads & keeps the ossl module
@@ -470,13 +476,25 @@ end
 
 ssl_preload()
 
+-- cliargs handling
+cli:set_name("frivpn_client")
+cli:argument("CONFIG", "config module to load (e.g. configs/ipredator)")
+cli:flag("-v, --version", "print frivpn's version", print_version)
+cli:flag("--notun", "creates no tun device")
+
+local args, err = cli:parse(arg)
+if not args and err then
+	print(string.format('%s: %s', cli.name, err))
+	os.exit(1)
+end
+
 -- load config
-local config = require(arg[1])
+local config = require(args["CONFIG"])
 config.port = config.port or 1195
 
 local tun = nil
 
-if arg[2] ~= "notun" then
+if not args["notun"] then
 	local status, tun_fd, tun_dev = pcall(tun_create)
 	if status then
 		local tun_pipe, tun_pid = tun_fork(tun_dev, config.netmask, config.on_connected)
